@@ -1,0 +1,307 @@
+import java.io.*;
+public class symbolTester {
+	//member variables
+	private String mPath, mSymbol;
+	private double mLoss, mTarget;
+	private tradeArray mTrades;
+	private barArray mData;
+	
+	public symbolTester(String symbol, String path, double loss, double target) {
+		mPath = path; //first 
+		mSymbol = symbol;//first BAC
+		mLoss = loss; //first 0.01
+		mTarget = target;//first = 0.01
+		mTrades = new tradeArray(200, 100);
+		mData = new barArray(4000);
+	}
+	public tradeArray getTrades() {
+		return mTrades;
+	}	
+	private boolean longPattern(int ind) {
+		if(mData.elementAt(ind).High() < mData.elementAt(ind-1).High()
+			&& mData.elementAt(ind).Low() <mData.elementAt(ind-1).Low()
+			&& mData.elementAt(ind).High() < mData.elementAt(ind+1).High()
+			&& mData.elementAt(ind).Low() <mData.elementAt(ind+1).Low()
+			&& mData.elementAt(ind+1).High() < mData.elementAt(ind + 2).High()
+			&& mData.elementAt(ind+1).Low() < mData.elementAt(ind + 2).Low()
+			&& mData.elementAt(ind+2).High() > mData.elementAt(ind+3).High()
+			&& mData.elementAt(ind+2).Low() > mData.elementAt(ind + 3).Low()
+			&& mData.elementAt(ind + 4).High() > mData.elementAt(ind + 3).High()
+		){
+			return true;
+		}
+		return false;
+	}
+	//make short pattern the inverse of long pattern +4 in long has to be minus 4 in short
+	private boolean shortPattern(int ind) {
+		if(mData.elementAt(ind-1).High() > mData.elementAt(ind).High()
+			&& mData.elementAt(ind-1).Low() > mData.elementAt(ind).Low()
+			&& mData.elementAt(ind+1).High() > mData.elementAt(ind).High()
+			&& mData.elementAt(ind+1).Low() >mData.elementAt(ind).Low()
+			&& mData.elementAt(ind+2).High() > mData.elementAt(ind+1).High()
+			&& mData.elementAt(ind+2).Low() > mData.elementAt(ind+1).Low()
+			&& mData.elementAt(ind+3).High() < mData.elementAt(ind+2).High()
+			&& mData.elementAt(ind+3).Low() < mData.elementAt(ind+2).Low()
+			&& mData.elementAt(ind+3).High() < mData.elementAt(ind+4).High()
+		){
+			return true;
+		}
+		return false;
+	}
+	private boolean periodH(int ind, int period){
+		for (int i=ind; i>ind-period; i--){
+			if(mData.elementAt(i).High() > mData.elementAt(ind).High())
+				return false;
+		}
+		return true;
+	}
+	
+	private boolean periodL(int ind, int period){
+		for (int i=ind; i>ind-period; i--){
+			if(mData.elementAt(i).Low() < mData.elementAt(ind).Low())
+				return false;
+		}
+		return true;
+	}
+	
+	void outcomeLong(Trade T, int ind){
+		if(mLoss == 0.0 && mTarget == 0.0) {
+			//close the trade the same day at ther close of the day
+			T.close(mData.elementAt(ind).getDate(), mData.elementAt(ind).Close());
+			return;
+		}
+		for (int i= ind; i<mData.size(); i++){
+			if(mData.elementAt(i).Low() <= T.getStopLoss()){
+				if(mData.elementAt(i).Open() < T.getStopLoss()){
+					T.close(mData.elementAt(i).getDate(), mData.elementAt(i).Open());
+					T.setHoldingPeriod(i-ind);
+					return;
+				}else {
+					T.close(mData.elementAt(i).getDate(), T.getStopLoss());
+					T.setHoldingPeriod(i-ind);
+					return;
+				}
+			}else if(mData.elementAt(i).High() > T.getTarget()){
+				if(mData.elementAt(i).Open() > T.getTarget()){
+					T.close(mData.elementAt(i).getDate(), mData.elementAt(i).Open());
+					T.setHoldingPeriod(i-ind);
+					return;
+				}else {
+					T.close(mData.elementAt(i).getDate(), T.getTarget());
+					T.setHoldingPeriod(i-ind);
+					return;
+				}
+			}
+		}
+		//Neither the stop loss or the target was reached
+		//close the trade at the close of the last day.
+		T.close(mData.elementAt(mData.size()-1).getDate(), mData.elementAt(mData.size()-1).Close());
+	}
+	void outcomeShort(Trade T, int ind){
+		if(mLoss == 0.0 && mTarget == 0) {
+			//close the trade the same day at ther close of the day
+			T.close(mData.elementAt(ind).getDate(), mData.elementAt(ind).Close());
+			return;
+		}
+		for (int i= ind; i<mData.size(); i++){
+			//if the high exceeds the loss, tehn we have a loss
+			if(mData.elementAt(i).High() >= T.getStopLoss()){
+				//The price may open higher than the loss, so close at the open
+				if(mData.elementAt(i).Open() > T.getStopLoss()){
+					T.close(mData.elementAt(i).getDate(), mData.elementAt(i).Open());
+					T.setHoldingPeriod(i-ind);
+					return;
+				}else {
+					T.close(mData.elementAt(i).getDate(), T.getStopLoss());
+					T.setHoldingPeriod(i-ind);
+					return;
+				}
+			}else if(mData.elementAt(i).Low() < T.getTarget()){
+				if(mData.elementAt(i).Open() < T.getTarget()){
+					T.close(mData.elementAt(i).getDate(), mData.elementAt(i).Open());
+					T.setHoldingPeriod(i-ind);
+					return;
+				}else {
+					T.close(mData.elementAt(i).getDate(), T.getTarget());
+					T.setHoldingPeriod(i-ind);
+					return;
+				}
+			}
+		}
+		//Neither the stop loss or the target was reached
+		//close the trade at the close of the last day.
+		T.close(mData.elementAt(mData.size()-1).getDate(), mData.elementAt(mData.size()-1).Close());
+			
+	}
+	public boolean test() {
+		//load the data into mData
+		if (!load()) {
+			return false;
+		}
+		//Now you have your data in mData mData.elementAt(0) is the oldest bar
+		//Example of a pattern:
+		//1- Today makes a lower low and lower high, yesterday made lower low and lower high
+		//2- Tomorrow makes higher low and a higher high. A 20 days high was made 3, 4 or 5 days ago.
+		//3- Buy the after tomorrow if the tomorrow high is broken (at tomorrows high +0.01). 
+		//4- Reverse for shorts
+	
+		for (int i = 25; i < mData.size()-5; i++){
+			//go through mData bar by bar 
+			//Do we have a patter at i
+			if(longPattern(i)&&(periodH(i-3, 20)||periodH(i-4, 20)||periodH(i-5, 20))){
+				//compute the buyPrice 
+				double buyPrice = mData.elementAt(i+1).High()+0.01;
+				if(mData.elementAt(i+2).Open() > buyPrice){
+					i = i+3;
+					continue;
+				}
+				double stopLoss = buyPrice*(1.0-mLoss);
+				double target = buyPrice*(1+mTarget);
+				//Create a trade 
+				Trade T = new Trade(mSymbol, mData.elementAt(i+2).getDate(), 
+						buyPrice, stopLoss, target, Direction.LONG);
+				//check the outcome of the trade, and close it 
+				outcomeLong(T, i+2);//check starting at index where we entered the trade
+				//outcomeLong will close the trade
+				//insert the trade into mTrades.
+				mTrades.insert(T);
+			}else if(shortPattern(i) &&(periodL(i-3, 20)||periodL(i-4, 20)||periodL(i-5, 20)) ){
+				//compute the buyPrice 
+				double sellPrice = mData.elementAt(i+1).Low()-0.01;
+				if(mData.elementAt(i+2).Open() < sellPrice){
+					i = i+3;
+					continue;
+				}
+				double stopLoss = sellPrice*(1.0 + mLoss);
+				double target = sellPrice*(1.0 - mTarget);
+				//Create a trade 
+				Trade T = new Trade(mSymbol, mData.elementAt(i+2).getDate(), 
+						sellPrice, stopLoss, target, Direction.SHORT);
+				//check the outcome of the trade, and close it 
+				outcomeShort(T, i+2);//check starting at index where we entered the trade
+				//outcomeLong will close the trade
+				//insert the trade into mTrades.
+				mTrades.insert(T);
+			}
+		}
+return true;
+	}
+public boolean test_40() {
+
+	  
+		for (int i = 45; i < mData.size()-5; i++){
+			//go through mData bar by bar 
+			//Do we have a patter at i
+			if(longPattern(i)&&(periodH(i-3, 40)||periodH(i-4, 40)||periodH(i-5, 40))){
+				//compute the buyPrice 
+				double buyPrice = mData.elementAt(i+1).High()+0.01;
+				if(mData.elementAt(i+2).Open() > buyPrice){
+					i = i+3;
+					continue;
+				}
+				double stopLoss = buyPrice*(1.0-mLoss);
+				double target = buyPrice*(1+mTarget);
+				//Create a trade 
+				Trade T = new Trade(mSymbol, mData.elementAt(i+2).getDate(), 
+						buyPrice, stopLoss, target, Direction.LONG);
+				//check the outcome of the trade, and close it 
+				outcomeLong(T, i+2);//check starting at index where we entered the trade
+				//outcomeLong will close the trade
+				//insert the trade into mTrades.
+				mTrades.insert(T);
+			}else if(shortPattern(i) &&(periodL(i-3, 40)||periodL(i-4, 40)||periodL(i-5, 40)) ){
+				//compute the buyPrice 
+				double sellPrice = mData.elementAt(i+1).Low()-0.01;
+				if(mData.elementAt(i+2).Open() < sellPrice){
+					i = i+3;
+					continue;
+				}
+				double stopLoss = sellPrice*(1.0 + mLoss);
+				double target = sellPrice*(1.0 - mTarget);
+				//Create a trade 
+				Trade T = new Trade(mSymbol, mData.elementAt(i+2).getDate(), 
+						sellPrice, stopLoss, target, Direction.SHORT);
+				//check the outcome of the trade, and close it 
+				outcomeShort(T, i+2);//check starting at index where we entered the trade
+				//outcomeLong will close the trade
+				//insert the trade into mTrades.
+				mTrades.insert(T);
+			}
+		}
+		
+return true;
+}
+public boolean test_60() {		
+			for (int i = 65; i < mData.size()-5; i++){
+				//go through mData bar by bar 
+				//Do we have a patter at i
+				if(longPattern(i)&&(periodH(i-3, 60)||periodH(i-4, 60)||periodH(i-5, 60))){
+					//compute the buyPrice 
+					double buyPrice = mData.elementAt(i+1).High()+0.01;
+					if(mData.elementAt(i+2).Open() > buyPrice){
+						i = i+3;
+						continue;
+					}
+					double stopLoss = buyPrice*(1.0-mLoss);
+					double target = buyPrice*(1+mTarget);
+					//Create a trade 
+					Trade T = new Trade(mSymbol, mData.elementAt(i+2).getDate(), 
+							buyPrice, stopLoss, target, Direction.LONG);
+					//check the outcome of the trade, and close it 
+					outcomeLong(T, i+2);//check starting at index where we entered the trade
+					//outcomeLong will close the trade
+					//insert the trade into mTrades.
+					mTrades.insert(T);
+				}else if(shortPattern(i) &&(periodL(i-3, 60)||periodL(i-4, 60)||periodL(i-5, 60)) ){
+					//compute the buyPrice 
+					double sellPrice = mData.elementAt(i+1).Low()-0.01;
+					if(mData.elementAt(i+2).Open() < sellPrice){
+						i = i+3;
+						continue;
+					}
+					double stopLoss = sellPrice*(1.0 + mLoss);
+					double target = sellPrice*(1.0 - mTarget);
+					//Create a trade 
+					Trade T = new Trade(mSymbol, mData.elementAt(i+2).getDate(), 
+							sellPrice, stopLoss, target, Direction.SHORT);
+					//check the outcome of the trade, and close it 
+					outcomeShort(T, i+2);//check starting at index where we entered the trade
+					//outcomeLong will close the trade
+					//insert the trade into mTrades.
+					mTrades.insert(T);
+				}
+			}
+	return true;
+}
+
+
+	
+	private boolean load() { //HW for the break
+		//build a file with path name using mPath and mSymbol
+		
+		String fileName = mPath+mSymbol+"_Daily.csv";//C:\ProfOmar286\Project\Data\BAC_Daily.csv
+		// first String fileName = "C:/ProfOmar286/Data/" + "BAC" +"_Daily.csv";
+		//check if the file exists (use FILE object)
+		 File myfile = new File(fileName);
+		 if (!myfile.exists()) {
+			 System.out.println("file does not exist");
+			 return false;
+		 }
+		 try {
+			FileReader fr = new FileReader(fileName);
+			//open the file FileReader->BufferedReader
+			BufferedReader br = new BufferedReader(fr);
+			String line = br.readLine();//discard this line
+			while((line=br.readLine()) != null) {
+				Bar b =new Bar(line);
+				mData.insert(b);
+			}
+			br.close();
+			return true;
+		 }catch(IOException e){
+			 System.out.println(e.toString());
+			 return false;
+		 }
+	}
+}
+
